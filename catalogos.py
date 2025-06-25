@@ -114,16 +114,16 @@ def administrar_tarjetas(cur, conn):
     
     # Mostrar tarjetas existentes
     cur.execute("""
-        SELECT t.idtarjeta, t.nombre, u.nombre AS usuario 
+        SELECT t.idtarjeta, t.nombre, u.nombre AS usuario, t.dia_corte,t.dia_pago
         FROM cat_tarjetas t
         LEFT JOIN tbl_usuarios u ON u.idusuario = t.idusuario
-        ORDER BY t.nombre
+        ORDER BY u.nombre asc, t.nombre desc
     """)
     tarjetas = cur.fetchall()
     
     if tarjetas:
         st.write("### Tarjetas Existentes")
-        df_tarjetas = pd.DataFrame(tarjetas, columns=["ID", "Nombre", "Usuario Asignado"])
+        df_tarjetas = pd.DataFrame(tarjetas, columns=["ID", "Nombre", "Usuario Asignado","Dia corte","Dia Limite Pago"])
         st.dataframe(df_tarjetas)
     else:
         st.info("No hay tarjetas registradas")
@@ -134,6 +134,8 @@ def administrar_tarjetas(cur, conn):
             st.write("### Agregar Nueva Tarjeta")
             nombre = st.text_input("Nombre de la Tarjeta", max_chars=50)
             usuario_asignado = st.selectbox("Usuario Asignado", usuarios_opciones)
+            dia_corte = st.number_input("Día de Corte", min_value=1, max_value=31, value=15)
+            dia_pago = st.number_input("Día de Pago", min_value=1, max_value=31, value=30)
             
             submitted = st.form_submit_button("Guardar Tarjeta")
             
@@ -147,8 +149,8 @@ def administrar_tarjetas(cur, conn):
                             usuario_id = usuario_id_map[usuario_asignado]
                         
                         cur.execute(
-                            "INSERT INTO cat_tarjetas (nombre, idusuario) VALUES (%s, %s)",
-                            (nombre.strip(), usuario_id)
+                            "INSERT INTO cat_tarjetas (nombre, idusuario,dia_corte,dia_pago) VALUES (%s, %s,%s, %s)",
+                            (nombre.strip(), usuario_id,dia_corte,dia_pago)
                         )
                         conn.commit()
                         st.success("¡Tarjeta agregada exitosamente!")
@@ -161,14 +163,14 @@ def administrar_tarjetas(cur, conn):
             return
             
         # Seleccionar tarjeta a editar
-        tarjetas_opciones = [f"{nombre} (ID: {id})" for id, nombre, _ in tarjetas]
+        tarjetas_opciones = [f"{nombre} (ID: {id})" for id, nombre, *rest in tarjetas]
         tarjeta_seleccionada = st.selectbox("Seleccione tarjeta a editar", options=tarjetas_opciones)
         
         # Obtener ID de la tarjeta seleccionada
         tarjeta_id = int(tarjeta_seleccionada.split("ID: ")[1].replace(")", ""))
         
         # Obtener datos actuales de la tarjeta
-        cur.execute("SELECT nombre, idusuario FROM cat_tarjetas WHERE idtarjeta = %s", (tarjeta_id,))
+        cur.execute("SELECT nombre, idusuario, dia_corte ,dia_pago FROM cat_tarjetas WHERE idtarjeta = %s", (tarjeta_id,))
         tarjeta_actual = cur.fetchone()
         
         if tarjeta_actual:
@@ -185,6 +187,8 @@ def administrar_tarjetas(cur, conn):
                 nuevo_nombre = st.text_input("Nombre", value=tarjeta_actual[0], max_chars=50)
                 nuevo_usuario = st.selectbox("Usuario Asignado", usuarios_opciones, 
                                             index=usuarios_opciones.index(usuario_actual_key))
+                dia_corte = st.number_input("Día de Corte", min_value=1, max_value=31, value=tarjeta_actual[2])
+                dia_pago = st.number_input("Día de Pago", min_value=1, max_value=31, value=tarjeta_actual[3])
                 
                 submitted = st.form_submit_button("Actualizar Tarjeta")
                 
@@ -195,8 +199,8 @@ def administrar_tarjetas(cur, conn):
                             nuevo_usuario_id = usuario_id_map[nuevo_usuario]
                         
                         cur.execute(
-                            "UPDATE cat_tarjetas SET nombre = %s, idusuario = %s WHERE idtarjeta = %s",
-                            (nuevo_nombre.strip(), nuevo_usuario_id, tarjeta_id)
+                            "UPDATE cat_tarjetas SET nombre = %s, idusuario = %s, dia_corte = %s, dia_pago = %s WHERE idtarjeta = %s",
+                            (nuevo_nombre.strip(), nuevo_usuario_id,dia_corte,dia_pago, tarjeta_id)
                         )
                         conn.commit()
                         st.success("¡Tarjeta actualizada exitosamente!")
