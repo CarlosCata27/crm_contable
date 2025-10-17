@@ -1,42 +1,46 @@
 import streamlit as st
 from connection_db import get_db_connection
 import pandas as pd
+from sqlalchemy import text
+
 
 def administrar_catalogos():
     st.header("📚 Administración de Catálogos")
     
+    # Conexión a la base de datos
+    conn = get_db_connection()
+
     # Selector de catálogo
     catalogo = st.selectbox(
         "Seleccionar Catálogo", 
-        ["Categorías de Gastos", "Tarjetas", "Usuarios"],
+        ["Categorías de Gastos", "Usuarios", "Tarjetas"],
         key="catalogo_selector"
     )
     
-    # Conexión a la base de datos
-    with get_db_connection() as conn:
-        cur = conn.cursor()
-        
-        if catalogo == "Categorías de Gastos":
-            administrar_categorias(cur, conn)
-        elif catalogo == "Tarjetas":
-            administrar_tarjetas(cur, conn)
-        elif catalogo == "Usuarios":
-            administrar_usuarios(cur, conn)
+    if catalogo == "Categorías de Gastos":
+        administrar_categorias(conn)
+    elif catalogo == "Tarjetas":
+        administrar_tarjetas(conn)
+    elif catalogo == "Usuarios":
+        administrar_usuarios(conn)
 
-def administrar_categorias(cur, conn):
+def administrar_categorias(conn):
     st.subheader("Categorías de Gastos")
+
+    if 'success_message' in st.session_state:
+        st.success(st.session_state.success_message)
+        del st.session_state.success_message
     
     # Selector de acción: Agregar o Editar
     accion = st.radio("Acción", ["Agregar nueva categoría", "Editar categoría existente"], horizontal=True)
-    
+
     # Mostrar categorías existentes
-    cur.execute("SELECT idcategoriagasto, nombre, tipo FROM cat_categoriagasto ORDER BY tipo, nombre")
-    categorias = cur.fetchall()
-    
-    if categorias:
+    categorias = conn.query("SELECT idcategoriagasto, nombre, tipo FROM cat_categoriagasto ORDER BY tipo, nombre",ttl=0)
+
+    if not categorias.empty:
         st.write("### Categorías Existentes")
-        df_categorias = pd.DataFrame(categorias, columns=["ID", "Nombre", "Tipo"])
-        st.dataframe(df_categorias)
+        categorias_representation = categorias.rename(columns={'idcategoriagasto': 'ID', 'nombre': 'Nombre', 'tipo': 'Tipo'})
+        st.dataframe(categorias_representation)
     else:
         st.info("No hay categorías registradas")
     
@@ -47,6 +51,8 @@ def administrar_categorias(cur, conn):
             nombre = st.text_input("Nombre de la Categoría", max_chars=50)
             tipo = st.selectbox("Tipo", ["Fijo", "Variable"])
             
+            
+            
             submitted = st.form_submit_button("Guardar Categoría")
             
             if submitted:
@@ -54,77 +60,89 @@ def administrar_categorias(cur, conn):
                     st.error("El nombre es obligatorio")
                 else:
                     try:
-                        cur.execute(
-                            "INSERT INTO cat_categoriagasto (nombre, tipo) VALUES (%s, %s)",
-                            (nombre.strip(), tipo)
-                        )
-                        conn.commit()
-                        st.success("¡Categoría agregada exitosamente!")
-                        st.rerun()
+                        with conn.session as s:
+                            sql = text("""INSERT INTO cat_categoriagasto (nombre, tipo) VALUES (:nombre, :tipo)""")
+                            s.execute(sql, {"nombre": nombre.strip(), "tipo": tipo})
+                            s.commit()
+                            st.session_state.success_message = f"¡Categoría '{nombre}' guardada exitosamente!"
+                            st.rerun()
+
                     except Exception as e:
-                        st.error(f"Error al guardar: {str(e)}")
+                        # Si hay un error de SQL, el rollback es implícito, pero es bueno tenerlo
+                        st.error(f"Error durante la operación: {str(e)}")
     else:  # Editar categoría existente
-        if not categorias:
+        if categorias.empty:
             st.warning("No hay categorías disponibles para editar")
             return
             
         # Seleccionar categoría a editar
-        categorias_opciones = [f"{nombre} (ID: {id})" for id, nombre, _ in categorias]
-        categoria_seleccionada = st.selectbox("Seleccione categoría a editar", options=categorias_opciones)
-        
+        categorias_opciones = {f"{row.nombre} (ID: {row.idcategoriagasto})": row.idcategoriagasto for row in categorias.itertuples(index=False)}
+        categoria_seleccionada = st.selectbox("Seleccione categoría a editar", options=list(categorias_opciones.keys()))
+
         # Obtener ID de la categoría seleccionada
-        categoria_id = int(categoria_seleccionada.split("ID: ")[1].replace(")", ""))
+        categoria_id = categorias_opciones[categoria_seleccionada]
         
-        # Obtener datos actuales de la categoría
-        cur.execute("SELECT nombre, tipo FROM cat_categoriagasto WHERE idcategoriagasto = %s", (categoria_id,))
-        categoria_actual = cur.fetchone()
-        
-        if categoria_actual:
+        # Obtener datos actuales de la categoría usando el DataFrame que ya tenemos
+        categoria_actual = categorias[categorias['idcategoriagasto'] == categoria_id].iloc[0]
+
+        if not categoria_actual.empty:
             with st.form("editar_categoria_form"):
-                st.write(f"### Editando categoría: {categoria_actual[0]}")
-                nuevo_nombre = st.text_input("Nombre", value=categoria_actual[0], max_chars=50)
+                st.write(f"### Editando categoría: {categoria_actual['nombre']}")
+                nuevo_nombre = st.text_input("Nombre", value=categoria_actual['nombre'], max_chars=50)
                 nuevo_tipo = st.selectbox("Tipo", ["Fijo", "Variable"], 
-                                         index=0 if categoria_actual[1] == "Fijo" else 1)
-                
+                                         index=0 if categoria_actual['tipo'] == "Fijo" else 1)
+
                 submitted = st.form_submit_button("Actualizar Categoría")
                 
                 if submitted:
                     try:
-                        cur.execute(
-                            "UPDATE cat_categoriagasto SET nombre = %s, tipo = %s WHERE idcategoriagasto = %s",
-                            (nuevo_nombre.strip(), nuevo_tipo, categoria_id)
-                        )
-                        conn.commit()
-                        st.success("¡Categoría actualizada exitosamente!")
+                        session = conn.session
+                        with session as s:
+                            s.execute(
+                                text("""UPDATE cat_categoriagasto SET nombre = :nombre, tipo = :tipo WHERE idcategoriagasto = :id"""),
+                                params={"nombre": nuevo_nombre.strip(), "tipo": nuevo_tipo, "id": categoria_id}
+                            )
+                            s.commit()
+                        st.session_state.success_message = f"¡Categoría '{nuevo_nombre}' actualizada exitosamente!"
                         st.rerun()
                     except Exception as e:
                         st.error(f"Error al actualizar: {str(e)}")
+                        s.rollback()
 
-def administrar_tarjetas(cur, conn):
+def administrar_tarjetas(conn):
     st.subheader("Tarjetas")
+
+    if 'success_message' in st.session_state:
+        st.success(st.session_state.success_message)
+        del st.session_state.success_message
     
     # Selector de acción: Agregar o Editar
     accion = st.radio("Acción", ["Agregar nueva tarjeta", "Editar tarjeta existente"], horizontal=True)
     
     # Obtener usuarios para asignación
-    cur.execute("SELECT idusuario, nombre FROM tbl_usuarios")
-    usuarios = cur.fetchall()
-    usuarios_opciones = ["(Sin usuario asignado)"] + [f"{nombre} (ID: {id})" for id, nombre in usuarios]
-    usuario_id_map = {f"{nombre} (ID: {id})": id for id, nombre in usuarios}
+    usuarios = conn.query("SELECT idusuario, nombre FROM tbl_usuarios")
+    usuarios_opciones = ["(Sin usuario asignado)"] + [f"{nombre} (ID: {id})" for id, nombre in usuarios.itertuples(index=False)]
+    usuario_id_map = {f"{nombre} (ID: {id})": id for id, nombre in usuarios.itertuples(index=False)}
+    
     
     # Mostrar tarjetas existentes
-    cur.execute("""
-        SELECT t.idtarjeta, t.nombre, u.nombre AS usuario, t.dia_corte,t.dia_pago
+    tarjetas = conn.query("""
+        SELECT t.idtarjeta, t.nombre AS tarjeta, u.idusuario, u.nombre AS usuario, t.dia_corte,t.dia_pago
         FROM cat_tarjetas t
         LEFT JOIN tbl_usuarios u ON u.idusuario = t.idusuario
-        ORDER BY u.nombre asc, t.nombre desc
-    """)
-    tarjetas = cur.fetchall()
-    
-    if tarjetas:
+        ORDER BY usuario asc, tarjeta desc
+    """, ttl=0)
+
+    if not tarjetas.empty:
         st.write("### Tarjetas Existentes")
-        df_tarjetas = pd.DataFrame(tarjetas, columns=["ID", "Nombre", "Usuario Asignado","Dia corte","Dia Limite Pago"])
-        st.dataframe(df_tarjetas)
+        tarjetas_representacion = tarjetas.rename(columns={
+            'idtarjeta': 'ID',
+            'tarjeta': 'Tarjeta',
+            'usuario': 'Dueño',
+            'dia_corte': 'Día de Corte',
+            'dia_pago': 'Día de Pago'
+        }).drop(columns=['idusuario'])
+        st.dataframe(tarjetas_representacion)
     else:
         st.info("No hay tarjetas registradas")
     
@@ -148,83 +166,112 @@ def administrar_tarjetas(cur, conn):
                         if usuario_asignado != "(Sin usuario asignado)":
                             usuario_id = usuario_id_map[usuario_asignado]
                         
-                        cur.execute(
-                            "INSERT INTO cat_tarjetas (nombre, idusuario,dia_corte,dia_pago) VALUES (%s, %s,%s, %s)",
-                            (nombre.strip(), usuario_id,dia_corte,dia_pago)
-                        )
-                        conn.commit()
-                        st.success("¡Tarjeta agregada exitosamente!")
-                        st.rerun()
+                        session = conn.session
+                        with session as s:
+                            sql = text("INSERT INTO cat_tarjetas (nombre, idusuario,dia_corte,dia_pago) VALUES (:nombre, :idusuario, :dia_corte, :dia_pago)")
+                            s.execute(
+                                sql,
+                                {
+                                    "nombre": nombre.strip(),
+                                    "idusuario": usuario_id,
+                                    "dia_corte": dia_corte,
+                                    "dia_pago": dia_pago
+                                }
+                            )
+                            s.commit()
+                            st.session_state.message = f"Tarjeta '{nombre}' guardada exitosamente!"
+                            st.rerun()
                     except Exception as e:
                         st.error(f"Error al guardar: {str(e)}")
     else:  # Editar tarjeta existente
-        if not tarjetas:
+        if tarjetas.empty:
             st.warning("No hay tarjetas disponibles para editar")
             return
             
         # Seleccionar tarjeta a editar
-        tarjetas_opciones = [f"{nombre} (ID: {id})" for id, nombre, *rest in tarjetas]
-        tarjeta_seleccionada = st.selectbox("Seleccione tarjeta a editar", options=tarjetas_opciones)
+        tarjetas_opciones = {f"{row.nombre} (ID: {row.idtarjeta})":row.idtarjeta for row in tarjetas.itertuples(index=False)}
+        tarjeta_seleccionada = st.selectbox("Seleccione tarjeta a editar", options=list(tarjetas_opciones.keys()))
         
         # Obtener ID de la tarjeta seleccionada
-        tarjeta_id = int(tarjeta_seleccionada.split("ID: ")[1].replace(")", ""))
+        tarjeta_id = tarjetas_opciones[tarjeta_seleccionada]
+
+        # Obtener datos actuales de la tarjeta usando el DataFrame que ya tenemos
+        tarjeta_actual = tarjetas[tarjetas['idtarjeta'] == tarjeta_id].iloc[0]
         
-        # Obtener datos actuales de la tarjeta
-        cur.execute("SELECT nombre, idusuario, dia_corte ,dia_pago FROM cat_tarjetas WHERE idtarjeta = %s", (tarjeta_id,))
-        tarjeta_actual = cur.fetchone()
-        
-        if tarjeta_actual:
+        if not tarjeta_actual.empty:
             # Determinar usuario actual asignado
             usuario_actual_key = "(Sin usuario asignado)"
-            if tarjeta_actual[1]:
-                for key, id_val in usuario_id_map.items():
-                    if id_val == tarjeta_actual[1]:
-                        usuario_actual_key = key
-                        break
+            current_user_id = tarjeta_actual['idusuario']
+            if pd.notna(current_user_id):
+                # Invertimos el mapa para buscar por ID
+                id_to_key_map = {v: k for k, v in usuario_id_map.items()}
+                # Usamos .get() para evitar errores si un usuario fue borrado
+                usuario_actual_key = id_to_key_map.get(current_user_id, "(Sin usuario asignado)")
             
             with st.form("editar_tarjeta_form"):
-                st.write(f"### Editando tarjeta: {tarjeta_actual[0]}")
-                nuevo_nombre = st.text_input("Nombre", value=tarjeta_actual[0], max_chars=50)
-                nuevo_usuario = st.selectbox("Usuario Asignado", usuarios_opciones, 
-                                            index=usuarios_opciones.index(usuario_actual_key))
-                dia_corte = st.number_input("Día de Corte", min_value=1, max_value=31, value=tarjeta_actual[2])
-                dia_pago = st.number_input("Día de Pago", min_value=1, max_value=31, value=tarjeta_actual[3])
-                
+                st.write(f"### Editando tarjeta: {tarjeta_actual['nombre']}")
+                nuevo_nombre = st.text_input("Nombre", value=tarjeta_actual['nombre'], max_chars=50)
+                try:
+                    indice_usuario_actual = usuarios_opciones.index(usuario_actual_key)
+                except ValueError:
+                    # Si el usuario ya no existe, por defecto ponemos "Sin asignar"
+                    indice_usuario_actual = 0
+                nuevo_usuario = st.selectbox("Usuario Asignado", usuarios_opciones, index=indice_usuario_actual)
+                dia_corte = st.number_input("Día de Corte", min_value=1, max_value=31, value=int(tarjeta_actual['dia_corte']))
+                dia_pago = st.number_input("Día de Pago", min_value=1, max_value=31, value=int(tarjeta_actual['dia_pago']))
+
                 submitted = st.form_submit_button("Actualizar Tarjeta")
                 
                 if submitted:
                     try:
-                        nuevo_usuario_id = None
-                        if nuevo_usuario != "(Sin usuario asignado)":
-                            nuevo_usuario_id = usuario_id_map[nuevo_usuario]
-                        
-                        cur.execute(
-                            "UPDATE cat_tarjetas SET nombre = %s, idusuario = %s, dia_corte = %s, dia_pago = %s WHERE idtarjeta = %s",
-                            (nuevo_nombre.strip(), nuevo_usuario_id,dia_corte,dia_pago, tarjeta_id)
-                        )
-                        conn.commit()
-                        st.success("¡Tarjeta actualizada exitosamente!")
+                        # Obtenemos el ID del usuario seleccionado (None si es "Sin asignar")
+                        nuevo_usuario_id = usuario_id_map.get(nuevo_usuario)
+                        with conn.session as s:
+                            sql = text("UPDATE cat_tarjetas SET nombre = :nombre, idusuario = :idusuario, dia_corte = :dia_corte, dia_pago = :dia_pago WHERE idtarjeta = :idtarjeta")
+                            s.execute(
+                                sql,
+                                {
+                                    "nombre": nuevo_nombre.strip(),
+                                    "idusuario": nuevo_usuario_id,
+                                    "dia_corte": dia_corte,
+                                    "dia_pago": dia_pago,
+                                    "idtarjeta": tarjeta_id
+                                }
+                            )
+                            s.commit()
+                        st.session_state.success_message = f"¡Tarjeta '{nuevo_nombre}' actualizada exitosamente!"
                         st.rerun()
                     except Exception as e:
                         st.error(f"Error al actualizar: {str(e)}")
 
-def administrar_usuarios(cur, conn):
+def administrar_usuarios(conn):
     st.subheader("Usuarios")
+
+    if 'success_message' in st.session_state:
+        st.success(st.session_state.success_message)
+        del st.session_state.success_message
     
     # Selector de acción: Agregar o Editar
     accion = st.radio("Acción", ["Agregar nuevo usuario", "Editar usuario existente"], horizontal=True)
     
     # Mostrar usuarios existentes
-    cur.execute("SELECT idusuario, nombre, apellido_paterno, apellido_materno, apodo, email FROM tbl_usuarios")
-    usuarios = cur.fetchall()
-    
-    if usuarios:
+    usuarios = conn.query("SELECT idusuario, nombre, apellido_paterno, apellido_materno, apodo, email,ingreso_mensual FROM tbl_usuarios ORDER BY idusuario",ttl=0)
+
+
+    if not usuarios.empty:
         st.write("### Usuarios Existentes")
-        df_usuarios = pd.DataFrame(
-            usuarios, 
-            columns=["ID", "Nombre", "Apellido Paterno", "Apellido Materno", "Apodo", "Email"]
-        )
-        st.dataframe(df_usuarios)
+        usuarios_representacion = usuarios.rename(
+            columns={
+                'idusuario': 'ID', 
+                'nombre': 'Nombre', 
+                'apellido_paterno': 'Apellido Paterno',
+                'apellido_materno': 'Apellido Materno',
+                'apodo': 'Apodo',
+                'email': 'Email',
+                'ingreso_mensual': 'Ingreso Mensual'
+            }
+        ).style.format({'Ingreso Mensual': '${:,.2f}'})
+        st.dataframe(usuarios_representacion)
     else:
         st.info("No hay usuarios registrados")
     
@@ -248,45 +295,48 @@ def administrar_usuarios(cur, conn):
                     st.error("Todos los datos son obligatorios (excepto email)")
                 else:
                     try:
-                        cur.execute(
-                            "INSERT INTO tbl_usuarios (nombre, apellido_paterno, apellido_materno, apodo, email) "
-                            "VALUES (%s, %s, %s, %s, %s)",
-                            (nombre.strip(), apellido_paterno.strip(), 
-                             apellido_materno.strip(), apodo.strip(), email.strip() if email else None)
-                        )
-                        conn.commit()
-                        st.success("¡Usuario agregado exitosamente!")
-                        st.rerun()
+                        with conn.session as s:
+                            sql = text("INSERT INTO tbl_usuarios (nombre, apellido_paterno, apellido_materno, apodo, email) VALUES (:nombre, :apellido_paterno, :apellido_materno, :apodo, :email)")
+                            s.execute(
+                                sql,
+                                {
+                                    "nombre": nombre.strip(),
+                                    "apellido_paterno": apellido_paterno.strip(),
+                                    "apellido_materno": apellido_materno.strip(),
+                                    "apodo": apodo.strip(),
+                                    "email": email.strip() if email else None
+                                }
+                            )
+                            s.commit()
+                            st.session_state.success_message = "¡Usuario agregado exitosamente!"
+                            st.rerun()
                     except Exception as e:
                         st.error(f"Error al guardar: {str(e)}")
     else:  # Editar usuario existente
-        if not usuarios:
+        if usuarios.empty:
             st.warning("No hay usuarios disponibles para editar")
             return
             
         # Seleccionar usuario a editar
-        usuarios_opciones = [f"{nombre} {apellido_paterno} (Apodo: {apodo}) (ID: {id})" 
-                            for id, nombre, apellido_paterno, apellido_materno, apodo, email in usuarios]
-        usuario_seleccionado = st.selectbox("Seleccione usuario a editar", options=usuarios_opciones)
-        
+        usuarios_opciones = {f"{row.nombre} {row.apellido_paterno} (Apodo: {row.apodo}) (ID: {row.idusuario})":row.idusuario for row in usuarios.itertuples(index=False)}
+        usuario_seleccionado = st.selectbox("Seleccione usuario a editar", options=list(usuarios_opciones.keys()))
+
         # Obtener ID del usuario seleccionado
-        usuario_id = int(usuario_seleccionado.split("ID: ")[1].replace(")", ""))
-        
+        usuario_id = usuarios_opciones[usuario_seleccionado]
+
         # Obtener datos actuales del usuario
-        cur.execute("SELECT nombre, apellido_paterno, apellido_materno, apodo, email FROM tbl_usuarios WHERE idusuario = %s", (usuario_id,))
-        usuario_actual = cur.fetchone()
-        
-        if usuario_actual:
+        usuario_actual = usuarios[usuarios['idusuario'] == usuario_id].iloc[0]
+        if not usuario_actual.empty:
             with st.form("editar_usuario_form"):
-                st.write(f"### Editando usuario: {usuario_actual[0]}")
+                st.write(f"### Editando usuario: {usuario_actual['nombre']} {usuario_actual['apellido_paterno']}")
                 col1, col2, col3 = st.columns(3)
-                nuevo_nombre = col1.text_input("Nombre", value=usuario_actual[0], max_chars=50)
-                nuevo_apellido_paterno = col2.text_input("Apellido Paterno", value=usuario_actual[1], max_chars=50)
-                nuevo_apellido_materno = col3.text_input("Apellido Materno", value=usuario_actual[2], max_chars=50)
+                nuevo_nombre = col1.text_input("Nombre", value=usuario_actual['nombre'], max_chars=50)
+                nuevo_apellido_paterno = col2.text_input("Apellido Paterno", value=usuario_actual['apellido_paterno'], max_chars=50)
+                nuevo_apellido_materno = col3.text_input("Apellido Materno", value=usuario_actual['apellido_materno'], max_chars=50)
 
                 col4, col5 = st.columns(2)
-                nuevo_apodo = col4.text_input("Apodo", value=usuario_actual[3], max_chars=50)
-                nuevo_email = col5.text_input("Email", value=usuario_actual[4] if usuario_actual[4] else "", max_chars=50)
+                nuevo_apodo = col4.text_input("Apodo", value=usuario_actual['apodo'], max_chars=50)
+                nuevo_email = col5.text_input("Email", value=usuario_actual['email'] if usuario_actual['email'] else "", max_chars=50)
                 
                 submitted = st.form_submit_button("Actualizar Usuario")
                 
@@ -295,15 +345,35 @@ def administrar_usuarios(cur, conn):
                         st.error("Todos los datos son obligatorios (excepto email)")
                     else:
                         try:
-                            cur.execute(
-                                "UPDATE tbl_usuarios SET nombre = %s, apellido_paterno = %s, apellido_materno = %s, apodo = %s, email = %s "
-                                "WHERE idusuario = %s",
-                                (nuevo_nombre.strip(), nuevo_apellido_paterno.strip(), 
-                                 nuevo_apellido_materno.strip(), nuevo_apodo.strip(), 
-                                 nuevo_email.strip() if nuevo_email else None, usuario_id)
-                            )
-                            conn.commit()
-                            st.success("¡Usuario actualizado exitosamente!")
-                            st.rerun()
+                            with conn.session as s:
+                                sql = text("UPDATE tbl_usuarios SET nombre = :nombre, apellido_paterno = :apellido_paterno, apellido_materno = :apellido_materno, apodo = :apodo, email = :email "
+                                            "WHERE idusuario = :idusuario")
+                                s.execute(
+                                    sql,
+                                    {
+                                        "nombre": nuevo_nombre.strip(),
+                                        "apellido_paterno": nuevo_apellido_paterno.strip(),
+                                        "apellido_materno": nuevo_apellido_materno.strip(),
+                                        "apodo": nuevo_apodo.strip(),
+                                        "email": nuevo_email.strip() if nuevo_email else None,
+                                        "idusuario": usuario_id
+                                    }
+                                )
+                                s.commit()
+                                st.session_state.success_message = f"¡Usuario {nuevo_nombre.strip()} actualizado exitosamente!"
+                                st.rerun()
                         except Exception as e:
                             st.error(f"Error al actualizar: {str(e)}")
+
+#CODIGO PARA PROBARLAS FUNCIONES SIN NECESIDAD DE HACER CAMBIOS EN DB 
+# --- PASO 1: AÑADIR UN CHECKBOX PARA EL MODO DE PRUEBA (COLOCAR ANTES DE BOTON DE SUBMIT)---
+""" is_dry_run = st.checkbox("Modo de prueba (no guardar en la BD)", value=True) """
+# --- PASO 2: MODIFICAR LA SECCIÓN DE SUBMIT PARA INCLUIR ROLLBACK EN MODO DE PRUEBA (DESPUES DEL S.EXECUTE())---
+""" if is_dry_run:
+    s.rollback()
+    st.info("MODO DE PRUEBA: El INSERT se ejecutó y se revirtió (ROLLBACK). No se guardaron datos.")
+else:
+    s.commit()
+    st.session_state.success_message = "¡Categoría '...' guardada exitosamente!"
+    st.rerun()
+"""

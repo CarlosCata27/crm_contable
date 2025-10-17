@@ -1,6 +1,13 @@
 import psycopg2
-from dotenv import load_dotenv
-import os
+import streamlit as st
+""" from dotenv import load_dotenv
+import os """
+
+""" 
+load_dotenv()
+
+# Fetch variables
+USER = os.getenv("user")
 
 load_dotenv()
 
@@ -18,8 +25,8 @@ DB_CONFIG = {
     "user": USER,
     "password": PASSWORD,
     "port":PORT
-}
+} """
 
 def get_db_connection():
-    return psycopg2.connect(**DB_CONFIG)
-
+    conn = st.connection("postgresql",type="sql")
+    return conn
