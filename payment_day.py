@@ -85,7 +85,7 @@ def set_payment_day():
                     desglose_df,  # Pasamos el DataFrame de datos puros
                     column_config=column_config,
                     hide_index=True,
-                    use_container_width=True
+                    width='content'
                 )
 
                 fecha_pago_agrupado = st.date_input("Fecha de pago", key="fecha_agrupado")
@@ -134,7 +134,7 @@ def set_payment_day():
                 column_config=column_config,
                 hide_index=True,
                 key="data_editor_detallado",
-                use_container_width=True
+                width='content'
             )
 
             fecha_pago_detallado = st.date_input("Fecha de pago", key="fecha_detallado")
