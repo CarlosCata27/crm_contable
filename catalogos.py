@@ -284,10 +284,11 @@ def administrar_usuarios(conn):
             apellido_paterno = col2.text_input("Apellido Paterno", max_chars=50)
             apellido_materno = col3.text_input("Apellido Materno", max_chars=50)
 
-            col4, col5 = st.columns(2)
+            col4, col5,col6 = st.columns(3)
             apodo = col4.text_input("Apodo", max_chars=50)
             email = col5.text_input("Email", max_chars=50)
-            
+            ingreso_mensual = col6.number_input("Ingreso Mensual", min_value=0, value=10000)
+
             submitted = st.form_submit_button("Guardar Usuario")
             
             if submitted:
@@ -304,7 +305,8 @@ def administrar_usuarios(conn):
                                     "apellido_paterno": apellido_paterno.strip(),
                                     "apellido_materno": apellido_materno.strip(),
                                     "apodo": apodo.strip(),
-                                    "email": email.strip() if email else None
+                                    "email": email.strip() if email else None,
+                                    "ingreso_mensual": ingreso_mensual
                                 }
                             )
                             s.commit()
@@ -334,10 +336,11 @@ def administrar_usuarios(conn):
                 nuevo_apellido_paterno = col2.text_input("Apellido Paterno", value=usuario_actual['apellido_paterno'], max_chars=50)
                 nuevo_apellido_materno = col3.text_input("Apellido Materno", value=usuario_actual['apellido_materno'], max_chars=50)
 
-                col4, col5 = st.columns(2)
+                col4, col5, col6 = st.columns(3)
                 nuevo_apodo = col4.text_input("Apodo", value=usuario_actual['apodo'], max_chars=50)
                 nuevo_email = col5.text_input("Email", value=usuario_actual['email'] if usuario_actual['email'] else "", max_chars=50)
-                
+                ingreso_mensual = col6.number_input("Ingreso Mensual", min_value=0, value=int(usuario_actual['ingreso_mensual']) if pd.notna(usuario_actual['ingreso_mensual']) else 0)
+
                 submitted = st.form_submit_button("Actualizar Usuario")
                 
                 if submitted:

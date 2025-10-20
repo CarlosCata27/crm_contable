@@ -14,7 +14,7 @@ st.set_page_config(
 # Interfaz principal
 def main():
     st.title("📝 Sistema de Gestión de Gastos")
-    menu_option = st.selectbox("Menú Principal", ["Registrar Transacción", "Administrar Catálogos","Registrar pagos"])
+    menu_option = st.selectbox("Menú Principal", ["Registrar Transacción","Registrar pagos","Administrar Catálogos"])
     
     # Registrar nueva transacción
     if menu_option == "Registrar Transacción":

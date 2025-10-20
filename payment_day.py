@@ -15,7 +15,7 @@ def set_payment_day():
     # Se define la conexión una sola vez al principio.
     conn = get_db_connection()
 
-    usuarios = conn.query("SELECT idusuario, apodo FROM tbl_usuarios ORDER BY idusuario",ttl=0)
+    usuarios = conn.query("SELECT idusuario, apodo FROM tbl_usuarios WHERE idusuario in (1,2) ORDER BY idusuario",ttl=0)
     usuarios = {apodo: id_usuario for id_usuario, apodo in usuarios.itertuples(index=False)}
 
     usuario_seleccionado = st.selectbox("Usuario", options=list(usuarios.keys()))

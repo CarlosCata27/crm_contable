@@ -6,4 +6,9 @@
 /instance/
 /pytest_cache/
 /__pycache__
-/__pycache__
+/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+__pycache__/catalogos.cpython-312.pyc
+__pycache__/insert_transaction.cpython-312.pyc

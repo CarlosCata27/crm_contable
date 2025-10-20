@@ -2,6 +2,7 @@ import streamlit as st
 from connection_db import get_db_connection
 from datetime import date
 import pandas as pd
+from sqlalchemy import text
 
 def insert_transaction():
     st.header("Nueva Transacción")
@@ -9,9 +10,13 @@ def insert_transaction():
     # Se define la conexión una sola vez al principio.
     conn = get_db_connection()
     
+    if 'success_message' in st.session_state:
+        st.success(st.session_state.success_message)
+        del st.session_state.success_message
+
     with st.form("transaccion_form"):
         # Obtener usuarios
-        df_usuarios = conn.query("SELECT idusuario, apodo FROM tbl_usuarios",ttl=0)
+        df_usuarios = conn.query("SELECT idusuario, apodo FROM tbl_usuarios ORDER BY idusuario",ttl=0)
         ## Iterar correctamente sobre el DataFrame.
         usuarios = {apodo: id_usuario for id_usuario, apodo in df_usuarios.itertuples(index=False)}
 
@@ -38,7 +43,7 @@ def insert_transaction():
         detalle = st.text_area("Detalle Adicional")
         monto = st.number_input("Monto Total", min_value=0.0, step=0.50)
         meses = st.number_input("Meses", min_value=1, value=1)
-        
+
         submitted = st.form_submit_button("Guardar Transacción")
         
         if submitted:
@@ -51,34 +56,37 @@ def insert_transaction():
 
                 ## CAMBIO 3: Usar conn.query() para obtener el ID de vuelta.
                 # Es más seguro usar parámetros con nombre (:param) en lugar de %s.
-                sql = """
-                    INSERT INTO tbl_transacciones (
-                        fecha, idusuario, idcategoriagasto, idtarjeta,
-                        descripcion, detalle, monto_total, meses_total
-                    ) VALUES (
+
+                print(id_categoria, id_usuario, id_tarjeta)
+
+                with conn.session as s:
+                    sql = text("""
+                        INSERT INTO tbl_transacciones (
+                            fecha, idusuario, idcategoriagasto, idtarjeta,
+                            descripcion, detalle, monto_total, meses_total
+                        ) VALUES (
                         :fecha, :id_usuario, :id_categoria, :id_tarjeta,
                         :descripcion, :detalle, :monto, :meses
-                    )
-                    RETURNING idtransaccion
-                """
-                
-                # conn.query() también funciona para INSERT...RETURNING
-                result_df = conn.query(sql, params={
-                    "fecha": fecha, 
-                    "id_usuario": id_usuario,
-                    "id_categoria": id_categoria,
-                    "id_tarjeta": id_tarjeta,
-                    "descripcion": descripcion,
-                    "detalle": detalle,
-                    "monto": monto,
-                    "meses": meses
-                })
-                
-                # Obtener el ID del DataFrame resultante
-                trans_id = result_df.iloc[0]['idtransaccion']
-
-                ## CAMBIO 4: Se elimina conn.commit(), no es necesario.
-                st.success(f"¡Transacción registrada con éxito! ID: {trans_id}")
+                        )
+                        RETURNING idtransaccion
+                    """)
+                    result_df = s.execute(sql, params={
+                        "fecha": fecha, 
+                        "id_usuario": id_usuario,
+                        "id_categoria": id_categoria,
+                        "id_tarjeta": id_tarjeta,
+                        "descripcion": descripcion,
+                        "detalle": detalle,
+                        "monto": monto,
+                        "meses": meses
+                    })
+                    
+                    # Obtener el ID del DataFrame resultante
+                    trans_id = result_df.fetchone()[0]
+                    s.commit()
+                    st.session_state.success_message = f"¡Transacción registrada con éxito! ID: {trans_id}"
+                    st.rerun()
+                    
                 
             except Exception as e:
                 st.error(f"Error al guardar la transacción: {str(e)}")
