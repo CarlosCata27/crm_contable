@@ -297,7 +297,7 @@ def administrar_usuarios(conn):
                 else:
                     try:
                         with conn.session as s:
-                            sql = text("INSERT INTO tbl_usuarios (nombre, apellido_paterno, apellido_materno, apodo, email) VALUES (:nombre, :apellido_paterno, :apellido_materno, :apodo, :email)")
+                            sql = text("INSERT INTO tbl_usuarios (nombre, apellido_paterno, apellido_materno, apodo, email,ingreso_mensual) VALUES (:nombre, :apellido_paterno, :apellido_materno, :apodo, :email, :ingreso_mensual)")
                             s.execute(
                                 sql,
                                 {
@@ -344,12 +344,12 @@ def administrar_usuarios(conn):
                 submitted = st.form_submit_button("Actualizar Usuario")
                 
                 if submitted:
-                    if not nuevo_nombre or not nuevo_apellido_paterno or not nuevo_apellido_materno or not nuevo_apodo:
+                    if not nuevo_nombre or not nuevo_apellido_paterno or not nuevo_apellido_materno or not nuevo_apodo or ingreso_mensual<=0:
                         st.error("Todos los datos son obligatorios (excepto email)")
                     else:
                         try:
                             with conn.session as s:
-                                sql = text("UPDATE tbl_usuarios SET nombre = :nombre, apellido_paterno = :apellido_paterno, apellido_materno = :apellido_materno, apodo = :apodo, email = :email "
+                                sql = text("UPDATE tbl_usuarios SET nombre = :nombre, apellido_paterno = :apellido_paterno, apellido_materno = :apellido_materno, apodo = :apodo, email = :email, ingreso_mensual=:ingreso_mensual "
                                             "WHERE idusuario = :idusuario")
                                 s.execute(
                                     sql,
@@ -359,6 +359,7 @@ def administrar_usuarios(conn):
                                         "apellido_materno": nuevo_apellido_materno.strip(),
                                         "apodo": nuevo_apodo.strip(),
                                         "email": nuevo_email.strip() if nuevo_email else None,
+                                        "ingreso_mensual": ingreso_mensual,
                                         "idusuario": usuario_id
                                     }
                                 )
