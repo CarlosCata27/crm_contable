@@ -59,7 +59,6 @@ def control_mensual():
     inicio_mes = pd.Timestamp(f'{anio_seleccionado}-{mes_seleccionado_num}-01')
     fin_mes = inicio_mes + pd.DateOffset(months=1)
     vencimiento_maximo = fin_mes + pd.Timedelta(days=10)
-    print(f"Vencimiento máximo: {vencimiento_maximo.strftime('%d de %B %Y')}")
 
     st.info(f"Mostrando gastos pagados entre el {inicio_mes.strftime('%d de %B %Y')} y el {(fin_mes - pd.Timedelta(days=1)).strftime('%d de %B %Y')} y gastos pendientes con vencimiento hasta el {vencimiento_maximo.strftime('%d de %B %Y')}.")
 
