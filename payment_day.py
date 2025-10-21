@@ -20,6 +20,10 @@ def set_payment_day():
 
     usuario_seleccionado = st.selectbox("Usuario", options=list(usuarios.keys()))
 
+    hoy = date.today()
+    vencimiento_maximo = f"{hoy.year}-{hoy.month + 1}-11"
+    print(f"Vencimiento máximo: {vencimiento_maximo}")
+
     cuotas_sin_pagar = conn.query("""
         SELECT tbc.idcuota, tbc.fecha_vencimiento, tbc.monto,tbc.numero_cuota,tbt.fecha,tbu.apodo,ccg.nombre AS categoria,
                  ct.idtarjeta,ct.nombre AS tarjeta,tbt.descripcion, tbt.detalle,tbt.monto_total, tbt.meses_total
@@ -28,9 +32,9 @@ def set_payment_day():
         JOIN tbl_usuarios tbu USING (idusuario)
         JOIN cat_tarjetas ct USING (idtarjeta)
         JOIN cat_categoriagasto ccg USING (idcategoriagasto)
-        WHERE tbc.pagado = FALSE AND ct.idusuario = :id_usuario
+        WHERE tbc.pagado = FALSE AND ct.idusuario = :id_usuario AND tbc.fecha_vencimiento < :vencimiento_maximo
         ORDER BY tbc.fecha_vencimiento ASC
-    """, params={"id_usuario": usuarios[usuario_seleccionado]}, ttl=0)
+    """, params={"id_usuario": usuarios[usuario_seleccionado], "vencimiento_maximo": vencimiento_maximo}, ttl=0)
 
     
     # (La primera parte de tu código, con la consulta, se mantiene igual)
@@ -74,7 +78,7 @@ def set_payment_day():
                     "categoria": "Categoría",
                     "tarjeta": st.column_config.TextColumn("Tarjeta", width="small"), # Ajuste de ancho aquí
                     "descripcion": "Descripción Compra",
-                    "detalle": "Detalle Adicional",
+                    "detalle": st.column_config.TextColumn("Detalle Adicional", width="medium"), # Ajuste de ancho aquí
                     "monto_total": st.column_config.NumberColumn("Monto Total Transacción", format="$%.2f"), # Formato de moneda aquí
                     "meses_total": "Total Meses",
                     "idtarjeta": None # Ocultar la columna de ID de tarjeta
@@ -123,7 +127,7 @@ def set_payment_day():
                 "categoria": "Categoría",
                 "tarjeta": "Tarjeta",
                 "descripcion": "Descripción Compra",
-                "detalle": "Detalle Adicional",
+                "detalle": st.column_config.TextColumn("Detalle Adicional", width="medium"),
                 "monto_total": st.column_config.NumberColumn("Monto Total Transacción", format="$%.2f"),
                 "meses_total": "Total Meses",
                 "idtarjeta": None # Ocultar la columna de ID de tarjeta
