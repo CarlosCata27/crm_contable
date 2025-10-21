@@ -40,7 +40,7 @@ def control_mensual():
     col_mes, col_anio, _ = st.columns([1, 1, 2])
     
     meses_espanol = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
-    anios_disponibles = list(range(anio_actual - 2, anio_actual + 3))
+    anios_disponibles = list(range(anio_actual - 1, anio_actual + 1))
 
     # 3. Usar el mes y año actuales para establecer el índice por defecto
     mes_seleccionado_str = col_mes.selectbox(
@@ -58,8 +58,10 @@ def control_mensual():
     mes_seleccionado_num = meses_espanol.index(mes_seleccionado_str) + 1
     inicio_mes = pd.Timestamp(f'{anio_seleccionado}-{mes_seleccionado_num}-01')
     fin_mes = inicio_mes + pd.DateOffset(months=1)
+    vencimiento_maximo = fin_mes + pd.Timedelta(days=10)
+    print(f"Vencimiento máximo: {vencimiento_maximo.strftime('%d de %B %Y')}")
 
-    st.info(f"Mostrando gastos con vencimiento entre el {inicio_mes.strftime('%d de %B %Y')} y el {(fin_mes - pd.Timedelta(days=1)).strftime('%d de %B %Y')}")
+    st.info(f"Mostrando gastos pagados entre el {inicio_mes.strftime('%d de %B %Y')} y el {(fin_mes - pd.Timedelta(days=1)).strftime('%d de %B %Y')} y gastos pendientes con vencimiento hasta el {vencimiento_maximo.strftime('%d de %B %Y')}.")
 
     cuotas_sin_pagar = conn.query("""
         SELECT tbc.idcuota, tbc.fecha_vencimiento, tbc.monto,tbc.numero_cuota,tbt.fecha,tbu.apodo,ccg.nombre AS categoria,ccg.tipo AS tipo_categoria,
@@ -69,9 +71,19 @@ def control_mensual():
         JOIN tbl_usuarios tbu USING (idusuario)
         JOIN cat_tarjetas ct USING (idtarjeta)
         JOIN cat_categoriagasto ccg USING (idcategoriagasto)
-        WHERE tbt.idusuario = :id_usuario AND (tbc.pagado = False OR (tbc.fecha_pago >= :inicio_mes AND tbc.fecha_pago < :fin_mes))
+        WHERE tbt.idusuario = :id_usuario AND (
+            (
+                tbc.pagado = False AND 
+                tbc.fecha_vencimiento < :vencimiento_maximo
+            )
+            OR 
+            (
+                tbc.fecha_pago >= :inicio_mes AND 
+                tbc.fecha_pago < :fin_mes
+            )
+        )
         ORDER BY tbt.fecha ASC
-    """, params={"id_usuario": id_usuario,"inicio_mes": inicio_mes, "fin_mes": fin_mes}, ttl=0)
+    """, params={"id_usuario": id_usuario,"inicio_mes": inicio_mes, "fin_mes": fin_mes, "vencimiento_maximo": vencimiento_maximo}, ttl=0)
 
     # 2. Define el mapa de reemplazo
     mapa_estado = {True: 'Pagado ✅', False: 'Pendiente ❌'}
