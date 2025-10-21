@@ -35,14 +35,20 @@ def insert_transaction():
         tarjetas = { f"{nombre} ({apodo})": id_tarjeta for id_tarjeta, nombre, apodo in df_tarjetas.itertuples(index=False)}
 
         # --- Campos del formulario (sin cambios) ---
-        fecha = st.date_input("Fecha", value=date.today())
-        usuario_seleccionado = st.selectbox("Usuario", options=list(usuarios.keys()))
-        categoria_seleccionada = st.selectbox("Categoría", options=list(categorias.keys()))
-        tarjeta_seleccionada = st.selectbox("Método de Pago", options=list(tarjetas.keys()))
+        col1, col2 = st.columns(2)
+        fecha = col1.date_input("Fecha", value=date.today())
+        categoria_seleccionada = col2.selectbox("Categoría", options=list(categorias.keys()))
+        
+        col3, col4 = st.columns(2)
+        usuario_seleccionado = col3.selectbox("Usuario", options=list(usuarios.keys()))
+        tarjeta_seleccionada = col4.selectbox("Método de Pago", options=list(tarjetas.keys()))
+
         descripcion = st.text_input("Descripción")
         detalle = st.text_area("Detalle Adicional")
-        monto = st.number_input("Monto Total", min_value=0.0, step=0.50)
-        meses = st.number_input("Meses", min_value=1, value=1)
+
+        col5, col6 = st.columns(2)
+        monto = col5.number_input("Monto Total", min_value=0.0, step=0.50)
+        meses = col6.number_input("Meses", min_value=1, value=1)
 
         submitted = st.form_submit_button("Guardar Transacción")
         
