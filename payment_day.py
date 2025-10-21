@@ -20,9 +20,10 @@ def set_payment_day():
 
     usuario_seleccionado = st.selectbox("Usuario", options=list(usuarios.keys()))
 
-    hoy = date.today()
-    vencimiento_maximo = f"{hoy.year}-{hoy.month + 1}-11"
-    print(f"Vencimiento máximo: {vencimiento_maximo}")
+    # Usar Timestamp de pandas es más fácil para operaciones
+    hoy = pd.Timestamp.today() 
+    fecha_siguiente_mes = hoy + pd.DateOffset(months=1)
+    vencimiento_maximo = fecha_siguiente_mes.replace(day=11)
 
     cuotas_sin_pagar = conn.query("""
         SELECT tbc.idcuota, tbc.fecha_vencimiento, tbc.monto,tbc.numero_cuota,tbt.fecha,tbu.apodo,ccg.nombre AS categoria,
