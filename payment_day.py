@@ -125,7 +125,7 @@ def set_payment_day():
                         desglose_df, 
                         column_config=get_column_config(ocultar_tarjeta=True),
                         hide_index=True,
-                        use_container_width=True
+                        width="stretch"
                     )
 
                     fecha_pago_agrupado = st.date_input("Fecha de pago", key="fecha_agrupado")
@@ -170,7 +170,7 @@ def set_payment_day():
                     column_config=get_column_config(ocultar_tarjeta=debo_ocultar),
                     hide_index=True,
                     key="editor_detallado",
-                    use_container_width=True
+                    width="stretch"
                 )
 
                 fecha_pago_detallado = st.date_input("Fecha de pago", key="fecha_detallado")
@@ -219,7 +219,7 @@ def set_payment_day():
                     column_config=get_column_config(ocultar_tarjeta=debo_ocultar),
                     hide_index=True,
                     key="editor_adelantado",
-                    use_container_width=True
+                    width="stretch"
                 )
 
                 fecha_pago_adelantado = st.date_input("Fecha de pago adelantado", key="fecha_adelantado")
