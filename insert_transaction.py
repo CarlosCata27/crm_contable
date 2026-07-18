@@ -73,7 +73,7 @@ def insert_transaction():
                 ## CAMBIO 3: Usar conn.query() para obtener el ID de vuelta.
                 # Es más seguro usar parámetros con nombre (:param) en lugar de %s.
 
-                print(id_categoria, id_usuario, id_tarjeta)
+                #print(id_categoria, id_usuario, id_tarjeta)
 
                 with conn.session as s:
                     sql = text("""
