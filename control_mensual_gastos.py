@@ -130,7 +130,7 @@ def control_mensual():
             cuotas_fijas.style.format({"monto": "${:,.2f}", "monto_total": "${:,.2f}"}, na_rep="-"),  # Pasamos el DataFrame de datos puros
             column_config=column_config,
             hide_index=True,
-            width='stretch',
+            use_container_width=True,
             height=600,
         )
  
@@ -157,6 +157,6 @@ def control_mensual():
             cuotas_variables.style.format({"monto": "${:,.2f}", "monto_total": "${:,.2f}"}, na_rep="-"),  # Pasamos el DataFrame de datos puros
             column_config=column_config,
             hide_index=True,
-            width='stretch',
+            use_container_width=True,
             height=600,
         )
