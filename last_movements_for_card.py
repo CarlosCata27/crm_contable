@@ -141,7 +141,7 @@ def last_movements_for_each_card():
 
         edited_transactions_df = st.data_editor(
             transactions, 
-            use_container_width=True, 
+            width="stretch", 
             hide_index=True, 
             column_config=column_config,
             key=editor_key
