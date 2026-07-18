@@ -18,16 +18,16 @@ def confirmar_guardado(cambios_dict, df_editado, df_original, mapa_us, mapa_cat,
                     
                     # Extraer toda la fila
                     nueva_fecha = df_editado.loc[row_index, 'fecha']
-                    nueva_desc = df_editado.loc[row_index, 'descripcion']
-                    nuevo_detalle = df_editado.loc[row_index, 'detalle']
-                    nuevo_monto = df_editado.loc[row_index, 'monto_total']
+                    nueva_desc = str(df_editado.loc[row_index, 'descripcion'])
+                    nuevo_detalle = str(df_editado.loc[row_index, 'detalle'])
+                    nuevo_monto = float(df_editado.loc[row_index, 'monto_total'])
                     
                     # Traducir los textos a IDs
                     apodo_sel = df_editado.loc[row_index, 'usuario_transaccion']
-                    nuevo_id_usuario = mapa_us[apodo_sel]
+                    nuevo_id_usuario = int(mapa_us[apodo_sel])
                     
                     cat_sel = df_editado.loc[row_index, 'categoria_gasto']
-                    nuevo_id_categoria = mapa_cat[cat_sel]
+                    nuevo_id_categoria = int(mapa_cat[cat_sel])
 
                     # El UPDATE a la BD
                     sql_update = text("""
