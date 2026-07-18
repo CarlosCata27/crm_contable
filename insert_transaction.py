@@ -21,18 +21,28 @@ def insert_transaction():
         usuarios = {apodo: id_usuario for id_usuario, apodo in df_usuarios.itertuples(index=False)}
 
         # Obtener categorías
-        df_categorias = conn.query("SELECT idcategoriagasto, nombre FROM cat_categoriagasto",ttl=0)
+        df_categorias = conn.query("""
+            SELECT c.idcategoriagasto, c.nombre, COUNT(tr.idtransaccion) as frecuencia
+            FROM cat_categoriagasto c
+            LEFT JOIN tbl_transacciones tr ON c.idcategoriagasto = tr.idcategoriagasto
+            GROUP BY c.idcategoriagasto, c.nombre
+            ORDER BY frecuencia DESC, c.nombre ASC
+        """,ttl=0)
         ## Iterar correctamente sobre el DataFrame.
-        categorias = {nombre: id_categoria for id_categoria, nombre in df_categorias.itertuples(index=False)}
+        categorias = {nombre: id_categoria for id_categoria, nombre,_ in df_categorias.itertuples(index=False)}
         
         # Obtener tarjetas 
         df_tarjetas = conn.query("""
-            SELECT t.idtarjeta, t.nombre, COALESCE(u.apodo, 'Sin asignar') AS apodo 
+            SELECT t.idtarjeta, t.nombre, COALESCE(u.apodo, 'Sin asignar') AS apodo, 
+            COUNT(tr.idtransaccion) as frecuencia
             FROM cat_tarjetas t
             LEFT JOIN tbl_usuarios u ON t.idusuario = u.idusuario
+            LEFT JOIN tbl_transacciones tr ON t.idtarjeta = tr.idtarjeta
+            GROUP BY t.idtarjeta, t.nombre, u.apodo
+            ORDER BY frecuencia DESC, t.nombre ASC
         """,ttl=0)
         ## Iterar correctamente sobre el DataFrame.
-        tarjetas = { f"{nombre} ({apodo})": id_tarjeta for id_tarjeta, nombre, apodo in df_tarjetas.itertuples(index=False)}
+        tarjetas = { f"{nombre} ({apodo})": id_tarjeta for id_tarjeta, nombre, apodo,_ in df_tarjetas.itertuples(index=False)}
 
         # --- Campos del formulario (sin cambios) ---
         col1, col2 = st.columns(2)
