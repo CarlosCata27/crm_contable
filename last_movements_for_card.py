@@ -67,11 +67,14 @@ def last_movements_for_each_card():
     # 1. SOLUCIÓN A TARJETAS DUPLICADAS: Agregamos el apodo del usuario
     # -------------------------------------------------------------------------
     cards = conn.query("""
-        SELECT ct.idtarjeta, ct.nombre, COALESCE(tu.apodo, 'Sin asignar') AS apodo 
-        FROM cat_tarjetas ct
-        LEFT JOIN tbl_usuarios tu USING (idusuario)
-        WHERE ct.idtarjeta != 11 
-        ORDER BY ct.idtarjeta
+        SELECT t.idtarjeta, t.nombre, COALESCE(u.apodo, 'Sin asignar') AS apodo, 
+            COUNT(tr.idtransaccion) as frecuencia
+        FROM cat_tarjetas t
+        LEFT JOIN tbl_usuarios u ON t.idusuario = u.idusuario
+        LEFT JOIN tbl_transacciones tr ON t.idtarjeta = tr.idtarjeta
+        GROUP BY t.idtarjeta, t.nombre, u.apodo
+        ORDER BY frecuencia DESC, t.nombre ASC
+        
     """, ttl=0)
     
     # El diccionario ahora tiene la llave "Nombre (Usuario)"
