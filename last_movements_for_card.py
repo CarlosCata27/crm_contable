@@ -4,7 +4,7 @@ import pandas as pd
 from sqlalchemy import text
 
 @st.dialog("⚠️ Confirmar Actualización")
-def confirmar_guardado(cambios_dict, df_editado, df_original, mapa_us, mapa_cat, conexion):
+def confirmar_guardado(cambios_dict, df_editado, df_original, mapa_us, mapa_cat,mapa_tarjetas, conexion):
     st.write("¿Estás seguro de que deseas guardar estas modificaciones en la base de datos? Esta acción no se puede deshacer.")
     
     col1, col2 = st.columns(2)
@@ -29,19 +29,23 @@ def confirmar_guardado(cambios_dict, df_editado, df_original, mapa_us, mapa_cat,
                     cat_sel = df_editado.loc[row_index, 'categoria_gasto']
                     nuevo_id_categoria = int(mapa_cat[cat_sel])
 
+                    tarjeta_sel = df_editado.loc[row_index, 'tarjeta_asignada']
+                    nuevo_id_tarjeta = int(mapa_tarjetas[tarjeta_sel])
+
                     # El UPDATE a la BD
                     sql_update = text("""
                         UPDATE tbl_transacciones
                         SET fecha = :fecha, descripcion = :desc, detalle = :detalle,
-                            monto_total = :monto, idusuario = :id_usuario, idcategoriagasto = :id_categoria
+                            monto_total = :monto, idusuario = :id_usuario, 
+                            idcategoriagasto = :id_categoria, idtarjeta = :id_tarjeta
                         WHERE idtransaccion = :id
                     """)
                     s.execute(sql_update, {
                         "fecha": nueva_fecha, "desc": nueva_desc, "detalle": nuevo_detalle,
                         "monto": nuevo_monto, "id_usuario": nuevo_id_usuario,
-                        "id_categoria": nuevo_id_categoria, "id": id_trans
+                        "id_categoria": nuevo_id_categoria, "id_tarjeta": nuevo_id_tarjeta, "id": id_trans
                     })
-                
+
                 s.commit()
                 # Guardamos el mensaje de éxito en memoria para que sobreviva al recargo de página
                 st.session_state.success_message = "¡Los cambios se guardaron correctamente!"
@@ -72,9 +76,9 @@ def last_movements_for_each_card():
         FROM cat_tarjetas t
         LEFT JOIN tbl_usuarios u ON t.idusuario = u.idusuario
         LEFT JOIN tbl_transacciones tr ON t.idtarjeta = tr.idtarjeta
+        WHERE t.idtarjeta != 11
         GROUP BY t.idtarjeta, t.nombre, u.apodo
         ORDER BY frecuencia DESC, t.nombre ASC
-        
     """, ttl=0)
     
     # El diccionario ahora tiene la llave "Nombre (Usuario)"
@@ -99,15 +103,18 @@ def last_movements_for_each_card():
                 tt.fecha,
                 tu.apodo as usuario_transaccion,
                 ccg.nombre as categoria_gasto,
+                -- Armamos el string exacto igual que en mapa_tarjetas
+                ct.nombre || ' (' || COALESCE(tu_tarjeta.apodo, 'Sin asignar') || ')' AS tarjeta_asignada,
                 tt.descripcion,
                 tt.detalle,
                 tt.monto_total,
                 tt.meses_total
         FROM tbl_transacciones tt
-        JOIN tbl_usuarios tu USING (idusuario)
-        JOIN cat_tarjetas ct USING (idtarjeta)
-        JOIN cat_categoriagasto ccg USING (idcategoriagasto)
-        WHERE tt.idtarjeta != 11 and tt.idtarjeta = :id_tarjeta
+        JOIN tbl_usuarios tu ON tt.idusuario = tu.idusuario
+        JOIN cat_tarjetas ct ON tt.idtarjeta = ct.idtarjeta
+        LEFT JOIN tbl_usuarios tu_tarjeta ON ct.idusuario = tu_tarjeta.idusuario
+        JOIN cat_categoriagasto ccg ON tt.idcategoriagasto = ccg.idcategoriagasto
+        WHERE tt.idtarjeta != 11 AND tt.idtarjeta = :id_tarjeta
         ORDER BY tt.fecha DESC
         LIMIT 50
     """, params={"id_tarjeta": key_selected_card}, ttl=0)
@@ -131,6 +138,9 @@ def last_movements_for_each_card():
                 options=list(mapa_categorias.keys()), # Opciones limitadas a las categorías existentes
                 required=True
             ), 
+            "tarjeta_asignada": st.column_config.SelectboxColumn(
+                "Tarjeta (Cuenta)", options=list(mapa_tarjetas.keys()), required=True
+            ),
             "descripcion": "Descripción",
             "detalle": "Detalle",
             "monto_total": st.column_config.NumberColumn("Monto", format="$%.2f", min_value=0.0),
@@ -181,6 +191,7 @@ def last_movements_for_each_card():
                     transactions, 
                     mapa_usuarios, 
                     mapa_categorias, 
+                    mapa_tarjetas,
                     conn
                 )
 
